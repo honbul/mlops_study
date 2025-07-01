@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tinyimagenet-train
+spec:
+  template:
+    spec:
+      containers:
+      - name: trainer
+        image: localhost:5000/timm-base:cuda12.1
+        imagePullPolicy: IfNotPresent
+        command: ["python", "timm/train.py"]
+        args:
+          - "/mnt/data"
+          - "--data-dir=/mnt/data"
+          - "--model=efficientnet_b0"
+          - "--num-classes=200"
+          - "--input-size"
+          - "3"
+          - "64"
+          - "64"
+          - "--epochs=1000"
+          - "-b=64"
+          - "--crop-pct=1.0"
+          - "--log-interval=50"
+          - "--output=/workspace/output/train"
+          - "-j=12"
+          - "--pin-mem"
+        env:
+        - name: CUDA_LAUNCH_BLOCKING
+          value: "1"
+        volumeMounts:
+        - name: tinyimagenet-volume
+          mountPath: /mnt/data
+      restartPolicy: Never
+      volumes:
+      - name: tinyimagenet-volume
+        persistentVolumeClaim:
+          claimName: tinyimagenet-pvc
+  backoffLimit: 1

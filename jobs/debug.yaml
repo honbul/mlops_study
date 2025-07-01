@@ -1,0 +1,18 @@
+# debug-tinyimagenet-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-tinyimagenet
+spec:
+  containers:
+  - name: debug
+    image: ubuntu:22.04
+    command: [ "sleep", "infinity" ]
+    volumeMounts:
+    - name: tinyimagenet-volume
+      mountPath: /mnt/data
+  volumes:
+  - name: tinyimagenet-volume
+    persistentVolumeClaim:
+      claimName: tinyimagenet-pvc
+  restartPolicy: Never

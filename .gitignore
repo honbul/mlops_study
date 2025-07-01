@@ -1,0 +1,9 @@
+# 데이터와 체크포인트 제외
+data/
+outputs/
+*.pt
+*.tar
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
