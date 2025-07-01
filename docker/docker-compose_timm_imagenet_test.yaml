@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  timm-train:
+    image: timm-base:cuda12.1
+    container_name: timm-train
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - /mnt/nfs_shared/data/tiny-imagenet-200:/data:ro   # NFS 경로를 마운트
+    stdin_open: true
+    tty: true
