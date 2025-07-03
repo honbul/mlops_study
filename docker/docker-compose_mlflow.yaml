@@ -1,17 +1,30 @@
 services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.12.1
+    container_name: mlflow
     ports:
       - "5001:5000"
     environment:
-      MLFLOW_ARTIFACT_ROOT: /mlflow-artifact
+      MLFLOW_TRACKING_URI: http://mlflow:5000
     volumes:
-      - /mnt/nfs_shared/mlflow-artifact:/mlflow-artifact
-    command: [
-      "mlflow", "server",
-      "--host", "0.0.0.0",
-      "--port", "5000",
-      "--backend-store-uri", "sqlite:///mlflow.db",
-      "--default-artifact-root", "/mlflow-artifact"
-    ]
+      - /mnt/nfs_shared/mlflow-artifact:/mlflow/artifacts
+      - /mnt/nfs_shared/mlflow-db:/mlflow/db
+    # ────────── comment 대신 리스트 형식 ──────────
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - sqlite:////mlflow/db/mlflow.db
+      - --artifacts-destination
+      - file:///mlflow/artifacts
+      - --serve-artifacts
+    restart: unless-stopped
 
+networks:
+  default:
+    external: true
+    name: network_mlflow

@@ -3,21 +3,31 @@ version: "3.9"
 services:
   timm-train:
     image: timm-base:cuda12.1          # 기존에 빌드해 둔 이미지
+    shm_size: "5g"
     container_name: timm-train
     runtime: nvidia                    # GPU 사용
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       # MLflow 서버가 호스트에서 5000 포트로 떠 있다고 가정
-      - MLFLOW_TRACKING_URI=http://host.docker.internal:5000
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
       - MLFLOW_EXPERIMENT_NAME=tiny-imagenet
     volumes:
       # NFS 경로 → 컨테이너 /data
       - /mnt/nfs_shared/data/tiny-imagenet-200:/data:ro
       # 아티팩트 저장용 경로 → 컨테이너 /output
-      - /mnt/nfs_shared/mlflow-artifact:/output
+      - /mnt/nfs_shared/mlflow-artifact:/mlflow/artifacts
+      - ./wrapper_mlflow.py:/workspace/wrapper_mlflow.py
     working_dir: /workspace            # 취향에 따라
     stdin_open: true                   # -it 옵션 대응
     tty: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [network_mlflow]
+
+networks:
+  network_mlflow:
+    external: true
+
     # 학습을 바로 돌리고 싶다면 ↓ 주석을 풀어 command 지정
     # command: >
     #   python wrapper_mlflow.py
