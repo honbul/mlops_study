@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tinyimagenet-mlflow-train          # ← 새 Job 이름
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: trainer
+        image: localhost:5000/timm-mlflow:cuda12.1
+        imagePullPolicy: IfNotPresent
+        # timm-mlflow 이미지 안의 래퍼 스크립트 실행
+        command: ["python", "/workspace/scripts/wrapper_mlflow.py"]
+        args:
+          - "--model=efficientnet_b0"
+          - "--data-dir=/mnt/data"
+          - "--output=/mlflow/artifacts/tinyimagenet"
+          - "--epochs=100"
+          - "--batch-size=64"
+        env:
+        - name: MLFLOW_TRACKING_URI        # MLflow 서버 주소
+          value: "http://my-mlflow.default.svc.cluster.local:5000"
+        - name: MLFLOW_EXPERIMENT_NAME     # 원하는 experiment 이름
+          value: "tiny-imagenet"
+        - name: CUDA_LAUNCH_BLOCKING
+          value: "1"
+        resources:                         # GPU 1개 요청 (NVIDIA Device Plugin 필요)
+          limits:
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: tinyimagenet-volume
+          mountPath: /mnt/data
+        - name: artifact-vol
+          mountPath: /mlflow/artifacts
+        - name: wrapper-vol
+          mountPath: /workspace/scripts/wrapper_mlflow.py
+          subPath: wrapper_mlflow.py
+          readOnly: true
+      volumes:
+      - name: tinyimagenet-volume
+        persistentVolumeClaim:
+          claimName: tinyimagenet-pvc
+      - name: artifact-vol
+        persistentVolumeClaim:
+          claimName: mlflow-artifact-pvc
+      - name: wrapper-vol
+        configMap:
+          name: wrapper-mlflow
+          items:
+            - key: wrapper_mlflow.py
+              path: wrapper_mlflow.py

@@ -1,146 +1,148 @@
 #!/usr/bin/env python3
 """
-wrapper_mlflow.py
-────────────────────────────────────────
-* timm 학습 로그를 실시간으로 MLflow 에 올림
-* 매 에폭마다 summary.csv 를 파싱해 metric 기록
-* 새 checkpoint-*.pth.tar 가 생길 때마다 artifact 로 업로드
+wrapper_mlflow.py ─────────────────────────────────────────────
+* timm 학습을 실행하고 매 epoch마다 metric / checkpoint 를 MLflow 로 업로드
+* stdout 은 지연 없이 바로 터미널에 뿌림
+* 파일 크기가 최소 0.5 s 이상 변하지 않을 때만 artifact 로 업로드
 """
 
-import argparse, subprocess, pathlib, csv, time, mlflow, os, sys, re, zipfile
+import argparse, subprocess, pathlib, csv, time, mlflow, os, sys, re, select
 
 # ────────── CLI
 def get_args():
     p = argparse.ArgumentParser()
     p.add_argument('--model', required=True)
     p.add_argument('--data-dir', required=True)
-    p.add_argument('--output', required=True)          # 예: /output
+    p.add_argument('--output', required=True)      # ex) /mlflow/artifacts/tiny
     p.add_argument('--epochs', type=int, default=10)
     p.add_argument('--batch-size', type=int, default=64)
     p.add_argument('--img-size', type=int, default=64)
     return p.parse_args()
 
 # ────────── metric
-_FLOAT_RE = re.compile(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$")
-def push_metrics(csv_path: pathlib.Path, seen_epochs: set[int]):
-    """
-    summary.csv 에서 아직 업로드하지 않은 epoch 행을 찾아 MLflow log
-    """
+_FLOAT = re.compile(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$")
+def push_metrics(csv_path: pathlib.Path, seen: set[int]):
     with csv_path.open(newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
+        rdr = csv.DictReader(f)
+        for row in rdr:
             try:
-                epoch = int(row["epoch"])
+                ep = int(row['epoch'])
             except (KeyError, ValueError):
                 continue
-            if epoch in seen_epochs:
+            if ep in seen:
                 continue
-            seen_epochs.add(epoch)
-
-            metrics = {
-                k: float(v) for k, v in row.items()
-                if k != "epoch" and v and _FLOAT_RE.fullmatch(v)
-            }
-            if metrics:
-                mlflow.log_metrics(metrics, step=epoch)
-                print(f"[metric] epoch {epoch}", flush=True)
+            seen.add(ep)
+            nums = {k: float(v) for k, v in row.items()
+                    if k != 'epoch' and v and _FLOAT.fullmatch(v)}
+            if nums:
+                mlflow.log_metrics(nums, step=ep)
+                print(f"[metric] epoch {ep}", flush=True)
 
 # ────────── artifact
-def log_artifact(path: pathlib.Path, subdir: str | None = None, seen: set[str] | None = None):
-    """
-    path 가 아직 업로드되지 않았으면 MLflow artifact 에 기록
-    """
-    name = path.name
-    if seen is not None and name in seen:
+def log_artifact(p: pathlib.Path, subdir: str | None, seen: set[str]):
+    name = p.name
+    if name in seen:
         return
-    mlflow.log_artifact(str(path), artifact_path=subdir)
-    print(f"[artifact] {subdir or '.'}/{name}", flush=True)
-    if seen is not None:
-        seen.add(name)
+    mlflow.log_artifact(str(p), artifact_path=subdir)
+    print(f"[artifact] {(subdir + '/' if subdir else '')}{name}", flush=True)
+    seen.add(name)
 
-# ────────── timm 도움말에서 플래그 지원 여부 확인
-def timm_has(flag: str) -> bool:
+# ────────── timm 플래그 지원 여부
+def timm_supports(flag: str) -> bool:
     try:
-        txt = subprocess.check_output(
-            ["python", "/workspace/timm/train.py", "-h"],
-            text=True, stderr=subprocess.DEVNULL
-        )
+        txt = subprocess.check_output(["python", "/workspace/timm/train.py", "-h"],
+                                      text=True, stderr=subprocess.DEVNULL)
         return flag in txt
     except subprocess.CalledProcessError:
         return False
 
 # ────────── main
 def main():
-    args = get_args()
+    a = get_args()
 
-    # MLflow 기본 설정
     mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
     mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT_NAME", "timm"))
 
-    run_name = f"{args.model}_{int(time.time())}"
-    run_root = pathlib.Path(args.output)
+    # ★ 시스템 메트릭 자동 로깅 활성화
+    #mlflow.enable_system_metrics_logging(interval=5)
+
+    run_name = f"{a.model}_{int(time.time())}"
+    run_root = pathlib.Path(a.output)
     run_dir  = run_root / run_name
     run_root.mkdir(parents=True, exist_ok=True)
 
-    # timm train.py 실행 인자
+    # timm 인자
     cmd = [
         "python", "/workspace/timm/train.py",
-        "--model", args.model,
-        "--data-dir", args.data_dir,
-        "--output", args.output,
+        "--model", a.model,
+        "--data-dir", a.data_dir,
+        "--output", a.output,
         "--experiment", run_name,
-        "--epochs", str(args.epochs),
-        "--batch-size", str(args.batch_size),
-        "--img-size", str(args.img_size),
+        "--epochs", str(a.epochs),
+        "--batch-size", str(a.batch_size),
+        "--img-size", str(a.img_size),
     ]
-    if timm_has("--checkpoint-hist"):
+    if timm_supports("--checkpoint-hist"):
         cmd += ["--checkpoint-hist", "3"]
-    if timm_has("--save-every"):
+    if timm_supports("--save-every"):
         cmd += ["--save-every", "1"]
-    if timm_has("--no-clean"):
-        cmd += ["--no-clean"]       # 삭제 방지 옵션이 있으면 사용
+    if timm_supports("--no-clean"):
+        cmd += ["--no-clean"]
 
     print("▶", " ".join(cmd), flush=True)
 
+    mlflow.enable_system_metrics_logging()
+
     with mlflow.start_run(run_name=run_name):
-        mlflow.log_params(vars(args))
+        mlflow.log_params(vars(a))
 
-        # timm 학습 프로세스 실행
-        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(cmd, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                bufsize=1)
 
-        seen_epochs: set[int] = set()
-        seen_ckpt:   set[str] = set()
+        poller = select.poll()
+        poller.register(proc.stdout, select.POLLIN)
+
+        seen_ep:   set[int]  = set()
+        seen_ckpt: set[str]  = set()
+        last_size: dict[pathlib.Path, int] = {}
+        SLEEP = 0.2   # poll 주기
 
         while proc.poll() is None:
-            # 1) timm stdout 중계
-            line = proc.stdout.readline()
-            if line:
-                print("[timm]", line.rstrip(), flush=True)
+            # ── stdout 비동기 읽기 ──────────────────────
+            if poller.poll(0):
+                line = proc.stdout.readline()
+                if line:
+                    print("[timm]", line.rstrip(), flush=True)
 
-            # 2) metric 실시간 업로드
-            csv_file = run_dir / "summary.csv"
-            if csv_file.exists():
-                push_metrics(csv_file, seen_epochs)
+            # ── metric 업로드 ───────────────────────────
+            csv = run_dir / "summary.csv"
+            if csv.exists():
+                cur = csv.stat().st_size
+                if last_size.get(csv) == cur:          # 0.2 s 간 크기가 변하지 않음
+                    push_metrics(csv, seen_ep)
+                last_size[csv] = cur
 
-            # 3) 새 checkpoint 발견 시 업로드
+            # ── checkpoint 업로드 ───────────────────────
             for ckpt in run_dir.glob("checkpoint-*.pth.tar"):
-                log_artifact(ckpt, subdir="checkpoints", seen=seen_ckpt)
+                cur = ckpt.stat().st_size
+                if ckpt.name not in seen_ckpt and last_size.get(ckpt) == cur:
+                    log_artifact(ckpt, "checkpoints", seen_ckpt)
+                last_size[ckpt] = cur
 
-            time.sleep(2)
+            time.sleep(SLEEP)
 
-        # ───── 학습 종료 후 남은 것 정리 ─────
+        # ── 종료 후 flush ──────────────────────────────
         if (run_dir / "summary.csv").exists():
-            push_metrics(run_dir / "summary.csv", seen_epochs)
-            log_artifact(run_dir / "summary.csv", subdir="logs")
+            push_metrics(run_dir / "summary.csv", seen_ep)
+            log_artifact(run_dir / "summary.csv", "logs", set())
         if (run_dir / "args.yaml").exists():
-            log_artifact(run_dir / "args.yaml", subdir="logs")
+            log_artifact(run_dir / "args.yaml", "logs", set())
 
-        # (선택) ZIP 파일(≤200 MB) 업로드
         zip_file = run_dir.with_suffix(".zip")
         if zip_file.exists() and zip_file.stat().st_size <= 200 * 2**20:
-            log_artifact(zip_file, subdir="run_zip")
+            log_artifact(zip_file, "run_zip", set())
 
-        # timm 프로세스 반환 코드 확인
         if proc.returncode != 0:
             raise subprocess.CalledProcessError(proc.returncode, cmd)
 

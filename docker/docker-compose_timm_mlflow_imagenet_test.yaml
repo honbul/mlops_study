@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   timm-train:
-    image: timm-base:cuda12.1          # 기존에 빌드해 둔 이미지
+    image: timm-mlflow:cuda12.1          # 기존에 빌드해 둔 이미지
     shm_size: "5g"
     container_name: timm-train
     runtime: nvidia                    # GPU 사용
@@ -29,10 +29,9 @@ networks:
     external: true
 
     # 학습을 바로 돌리고 싶다면 ↓ 주석을 풀어 command 지정
-    # command: >
-    #   python wrapper_mlflow.py
-    #   --model efficientnet_lite0
-    #   --data-dir /data
-    #   --output /output/exp1
-    #   --epochs 5
-    #   --batch-size 64
+#python /workspace/wrapper_mlflow.py \
+#  --model efficientnet_lite0 \
+#  --data-dir /data \
+#  --output /mlflow/artifacts/tiny-imagenet \
+#  --epochs 5 \
+#  --batch-size 64

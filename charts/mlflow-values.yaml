@@ -1,0 +1,29 @@
+image:
+  repository: ghcr.io/mlflow/mlflow
+  tag: v2.12.1
+
+extraArgs:                # ← CLI 인자, 그대로 kebab-case로 변환
+  backend-store-uri: sqlite:////mlflow/db/mlflow.db
+  default-artifact-root: file:///mlflow/artifacts
+  host: 0.0.0.0
+  port: "5000"
+
+extraFlags:
+  - serve-artifacts        # (--serve-artifacts)
+
+# PVC ↔ Pod 매핑
+extraVolumes:
+  - name: mlflow-artifact
+    persistentVolumeClaim:
+      claimName: mlflow-artifact-pvc
+  - name: mlflow-db
+    persistentVolumeClaim:
+      claimName: mlflow-db-pvc
+extraVolumeMounts:
+  - name: mlflow-artifact
+    mountPath: /mlflow/artifacts
+  - name: mlflow-db
+    mountPath: /mlflow/db
+
+service:
+  type: ClusterIP          # 필요하면 NodePort/Ingress 로 변경
