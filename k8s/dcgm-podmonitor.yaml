@@ -4,7 +4,7 @@ metadata:
   name: dcgm-exporter
   namespace: gpu-operator
   labels:
-    release: kube-prometheus-stack  # 이 라벨이 Prometheus와 연결됨
+    release: kube-prom-stack  # 이 라벨이 Prometheus와 연결됨
 spec:
   selector:
     matchLabels:
