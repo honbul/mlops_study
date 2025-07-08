@@ -9,5 +9,5 @@ spec:
     - ReadWriteMany
   nfs:
     server: 127.0.0.1
-    path: /srv/nfs/kube-share/mlflow-db
+    path: /srv/nfs/kube-share/mlflow/mlflow-db
   persistentVolumeReclaimPolicy: Retain

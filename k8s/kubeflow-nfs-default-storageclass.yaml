@@ -1,0 +1,15 @@
+# kubeflow-nfs-default-storageclass.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kubeflow-nfs
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"   # 필요하면 "true"
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: 127.0.0.1          # ← 반드시 수정
+  share: /srv/nfs/kube-share # ← /etc/exports 에서 export 한 경로
+reclaimPolicy: Retain        # PVC 삭제해도 데이터 보존
+volumeBindingMode: Immediate
+mountOptions:
+  - vers=4.1

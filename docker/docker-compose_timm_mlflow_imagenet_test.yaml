@@ -15,7 +15,7 @@ services:
       # NFS 경로 → 컨테이너 /data
       - /mnt/nfs_shared/data/tiny-imagenet-200:/data:ro
       # 아티팩트 저장용 경로 → 컨테이너 /output
-      - /mnt/nfs_shared/mlflow-artifact:/mlflow/artifacts
+      - /mnt/nfs_shared/mlflow/mlflow-artifact:/mlflow/artifacts
       - ./wrapper_mlflow.py:/workspace/wrapper_mlflow.py
     working_dir: /workspace            # 취향에 따라
     stdin_open: true                   # -it 옵션 대응

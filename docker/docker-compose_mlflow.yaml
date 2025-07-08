@@ -7,8 +7,8 @@ services:
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
     volumes:
-      - /mnt/nfs_shared/mlflow-artifact:/mlflow/artifacts
-      - /mnt/nfs_shared/mlflow-db:/mlflow/db
+      - /mnt/nfs_shared/mlflow/mlflow-artifact:/mlflow/artifacts
+      - /mnt/nfs_shared/mlflow/mlflow-db:/mlflow/db
     # ────────── comment 대신 리스트 형식 ──────────
     command:
       - mlflow
