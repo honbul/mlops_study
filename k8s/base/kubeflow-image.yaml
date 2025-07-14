@@ -1,0 +1,9 @@
+apiVersion: kubeflow.org/v1alpha1
+kind: NotebookImage
+metadata:
+  name: timm-mlflow
+  namespace: kubeflow
+spec:
+  displayName: "timm-mlflow (CUDA 12.1)"
+  description: "My custom training image with timm + mlflow"
+  image: "localhost:5000/timm-mlflow:cuda12.1"
