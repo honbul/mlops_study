@@ -15,6 +15,8 @@ c.ServerApp.allow_origin = '*'\n\
 c.ServerApp.base_url = '${NB_PREFIX}'" \
     > /home/${NB_USER}/.jupyter/jupyter_server_config.py
 
+COPY ./wrapper_mlflow.py /workspace/wrapper_mlflow.py
+
 ENV HOME=/home/${NB_USER}
 WORKDIR ${HOME}
 USER ${NB_USER}

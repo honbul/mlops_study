@@ -1,0 +1,81 @@
+# PIPELINE DEFINITION
+# Name: timm-pipeline-v2-pvc
+# Description: Train timm with TinyImageNet using PVC in KFP v2
+# Inputs:
+#    pvc_data_dir: str [Default: '/mnt/data']
+#    pvc_name: str [Default: 'tinyimagenet-pvc']
+components:
+  comp-train-timm-imagenet-tiny:
+    executorLabel: exec-train-timm-imagenet-tiny
+    inputDefinitions:
+      parameters:
+        data_dir:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        output_dir:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-train-timm-imagenet-tiny:
+      container:
+        args:
+        - "import os, sys, subprocess\ndata_dir = sys.argv[1]\noutput_path = sys.argv[2]\n\
+          print('CWD:', os.getcwd())\nprint('List /mnt/data:', os.listdir('/mnt/data')\
+          \ if os.path.exists('/mnt/data') else '\uC5C6\uC74C')\nsubprocess.run([\n\
+          \    'python', '/workspace/timm/train.py',\n    data_dir,\n    '--data-dir',\
+          \ data_dir,\n    '--model', 'efficientnet_b0',\n    '--num-classes', '200',\n\
+          \    '--input-size', '3', '64', '64',\n    '--epochs', '5',\n    '-b', '64',\n\
+          \    '--crop-pct', '1.0',\n    '--log-interval', '50',\n    '--output',\
+          \ output_path,\n    '-j', '8',\n    '--pin-mem'\n], check=True)\n# \u2705\
+          \ output_dir \uB0B4\uBD80\uC5D0 dummy \uD30C\uC77C \uC0DD\uC131\uD574\uC11C\
+          \ \uBA85\uC2DC\uC801 \uC544\uD2F0\uD329\uD2B8\uD654\nwith open(os.path.join(output_path,\
+          \ 'done.txt'), 'w') as f:\n    f.write('Training done.')\n"
+        - '{{$.inputs.parameters[''data_dir'']}}'
+        - '{{$.outputs.parameters[''output_dir''].output_file}}'
+        command:
+        - python
+        - -c
+        image: localhost:5000/timm-jupyter:cuda12.1
+pipelineInfo:
+  description: Train timm with TinyImageNet using PVC in KFP v2
+  name: timm-pipeline-v2-pvc
+root:
+  dag:
+    tasks:
+      train-timm-imagenet-tiny:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-timm-imagenet-tiny
+        inputs:
+          parameters:
+            data_dir:
+              componentInputParameter: pvc_data_dir
+        taskInfo:
+          name: train-timm-imagenet-tiny
+  inputDefinitions:
+    parameters:
+      pvc_data_dir:
+        defaultValue: /mnt/data
+        isOptional: true
+        parameterType: STRING
+      pvc_name:
+        defaultValue: tinyimagenet-pvc
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.13.0
+---
+platforms:
+  kubernetes:
+    deploymentSpec:
+      executors:
+        exec-train-timm-imagenet-tiny:
+          pvcMount:
+          - componentInputParameter: pvc_name
+            mountPath: /mnt/data
+            pvcNameParameter:
+              componentInputParameter: pvc_name
